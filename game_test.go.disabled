@@ -1,0 +1,110 @@
+package got
+
+import (
+	"net/http"
+	"net/url"
+	"testing"
+
+	"bitbucket.org/SlothNinja/gaelic-old"
+	. "launchpad.net/gocheck"
+
+	"github.com/icub3d/appenginetesting"
+)
+
+var ctx *appenginetesting.CTX
+var g *Game
+var u1, u2, u3 *sn.User
+var storedContests sn.Contests
+var req *http.Request
+
+// Hook up gocheck into the gotest runner.
+func Test(t *testing.T) { TestingT(t) }
+
+type MySuite struct{}
+
+var _ = Suite(&MySuite{})
+
+func getRequest() *http.Request {
+	r, _ := http.NewRequest("GET", "http://localhost", nil)
+	r.Header.Set("App-Testing", "1")
+	return r
+}
+
+func (s *MySuite) SetUpSuite(c *C) {
+	createContext(c)
+}
+
+func (s *MySuite) SetUpTest(c *C) {
+	createTestUsers(c)
+	createTestGames(c)
+
+	values, err := g.getValues()
+	c.Assert(err, IsNil)
+
+	// Clear values
+	for k, _ := range values {
+		values.Del(k)
+	}
+}
+
+func createContext(c *C) {
+	var err error
+	ctx, err = appenginetesting.NewContext(nil)
+	c.Assert(err, Equals, nil)
+	req = getRequest()
+}
+
+func createTestUsers(c *C) {
+	u1, u2, u3 = sn.NewUser(req), sn.NewUser(req), sn.NewUser(req)
+
+	//User1
+	db.SetNewKey(u1, "", 1)
+	u1.Name = "jeff"
+	u1.LCName = "jeff"
+	u1.Email = "jeff@example.com"
+	u1.GoogleID = "12345"
+
+	//User2
+	db.SetNewKey(u2, "", 2)
+	u2.Name = "joe"
+	u2.LCName = "joe"
+	u2.Email = "joe@example.com"
+	u2.GoogleID = "23456"
+
+	//User3
+	db.SetNewKey(u3, "", 3)
+	u3.Name = "trudy"
+	u3.LCName = "trudy"
+	u3.Email = "trudy@example.com"
+	u3.GoogleID = "23457"
+}
+
+func createTestGames(c *C) {
+	values1 := make(url.Values)
+	values1.Set("title", "Jeff's Game")
+	values1.Set("game-type", "3")
+	values1.Set("number_of_players", "3")
+
+	g = New(req).(*Game)
+
+	c.Assert(u1, Not(IsNil))
+
+	// Game 1
+	err := g.FromForm(u1, values1, sn.ATF)
+	c.Assert(err, IsNil)
+
+	db.SetNewKey(g, "", 1)
+	g.UserIDS = db.IDS{1, 2, 3}
+	g.Users = sn.Users{u1, u2, u3}
+
+	g.afterCommon()
+
+	// Initial game setup
+	g.FromHeader()
+
+	g.afterCommon()
+}
+
+func (s *MySuite) TearDownSuite(c *C) {
+	ctx.Close()
+}
